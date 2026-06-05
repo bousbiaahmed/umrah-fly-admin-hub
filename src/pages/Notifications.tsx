@@ -44,7 +44,7 @@ export default function Notifications() {
   const load = async () => {
     setLoading(true);
     try {
-      const data = await api.get<any>("/notifications/");
+      const data = await api.get<any>("/notifications/admin/all");
       const arr = Array.isArray(data) ? data : (Array.isArray(data?.notifications) ? data.notifications : []);
       setList(arr);
     } catch (err: any) { toast.error(err?.message || "Échec du chargement des notifications"); }

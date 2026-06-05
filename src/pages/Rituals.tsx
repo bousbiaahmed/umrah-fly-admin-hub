@@ -313,8 +313,11 @@ export default function Rituals() {
                           <div className="font-medium text-sm">{loc(e.titre) || "—"}</div>
                           {loc(e.description) && <div className="text-xs text-muted-foreground mt-1">{loc(e.description)}</div>}
                         </div>
-                        <div className="flex gap-1" />
-
+                        <div className="flex gap-1">
+                          <Button size="icon" variant="ghost" onClick={() => setDeletingEtape(e)} title="Supprimer">
+                            <Trash2 size={14} className="text-destructive" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>

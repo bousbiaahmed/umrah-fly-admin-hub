@@ -181,22 +181,13 @@ export default function Plannings() {
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
               />
             </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Date & heure">
-                <Input
-                  type="datetime-local"
-                  value={form.date_heure || ""}
-                  onChange={(e) => setForm((f) => ({ ...f, date_heure: e.target.value }))}
-                />
-              </Field>
-              <Field label="Type d'événement">
-                <Input
-                  value={form.type_evenement || ""}
-                  placeholder="ex: Omra, Hajj…"
-                  onChange={(e) => setForm((f) => ({ ...f, type_evenement: e.target.value }))}
-                />
-              </Field>
-            </div>
+            <Field label="Type d'événement">
+              <Input
+                value={form.type_evenement || ""}
+                placeholder="ex: Omra, Hajj…"
+                onChange={(e) => setForm((f) => ({ ...f, type_evenement: e.target.value }))}
+              />
+            </Field>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setAdding(false); setEditing(null); }} disabled={saving}>

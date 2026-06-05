@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Eye, Plus, BookOpen } from "lucide-react";
+import { Eye, Plus, BookOpen, Pencil, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { PageSpinner, Spinner } from "@/components/Spinner";
 import { DataTable, Column } from "@/components/DataTable";
 import { EmptyState } from "@/components/EmptyState";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,6 +31,10 @@ export default function Duas() {
   const [loading, setLoading] = useState(true);
   const [viewing, setViewing] = useState<Dua | null>(null);
   const [adding, setAdding] = useState(false);
+  const [editingDua, setEditingDua] = useState<Dua | null>(null);
+  const [deletingDua, setDeletingDua] = useState<Dua | null>(null);
+  const [delLoading, setDelLoading] = useState(false);
+
   const [titre, setTitre] = useState<I18nValue>({});
   const [traduction, setTraduction] = useState<I18nValue>({});
   const [texteArabe, setTexteArabe] = useState("");
@@ -50,37 +55,76 @@ export default function Duas() {
 
   const resetForm = () => {
     setTitre({}); setTraduction({}); setTexteArabe(""); setAudioFile(null); setErrors({});
+    setEditingDua(null);
+  };
+
+  const openEdit = (d: Dua) => {
+    setEditingDua(d);
+    setTitre(toI18n(d.titre));
+    setTraduction(toI18n(d.traduction));
+    setTexteArabe(d.texte_arabe || "");
+    setAudioFile(null);
+    setErrors({});
+    setAdding(true);
   };
 
   const submit = async () => {
     const errs: Record<string, string> = {};
     if (!hasI18n(titre)) errs.titre = "Requis";
     if (!texteArabe.trim()) errs.texte_arabe = "Requis";
-    if (!audioFile) errs.audio = "Fichier audio requis";
+    if (!editingDua && !audioFile) errs.audio = "Fichier audio requis";
     setErrors(errs);
     if (Object.keys(errs).length) return;
 
     setSaving(true);
     try {
-      const formData = new FormData();
-      formData.append("audio", audioFile!);
-      const uploadRes = await api.postForm<{ filename: string }>("/douaa/upload-audio", formData);
-      const { filename } = uploadRes;
-
-      await api.post("/douaa/", {
-        titre,
-        texte_arabe: texteArabe,
-        traduction,
-        audio_filename: filename,
-      });
-
-      toast.success("Douaa créée avec succès");
+      if (editingDua) {
+        let audio_filename: string | undefined;
+        if (audioFile) {
+          const formData = new FormData();
+          formData.append("audio", audioFile);
+          const uploadRes = await api.postForm<{ filename: string }>("/douaa/upload-audio", formData);
+          audio_filename = uploadRes.filename;
+        }
+        await api.put(`/douaa/${editingDua.id_douaa}`, {
+          titre,
+          texte_arabe: texteArabe,
+          traduction,
+          ...(audio_filename && { audio_filename }),
+        });
+        toast.success("Douaa mise à jour");
+      } else {
+        const formData = new FormData();
+        formData.append("audio", audioFile!);
+        const uploadRes = await api.postForm<{ filename: string }>("/douaa/upload-audio", formData);
+        const { filename } = uploadRes;
+        await api.post("/douaa/", {
+          titre,
+          texte_arabe: texteArabe,
+          traduction,
+          audio_filename: filename,
+        });
+        toast.success("Douaa créée avec succès");
+      }
       setAdding(false);
       resetForm();
       load();
     } catch (err: any) {
-      toast.error(err?.message || "Échec de la création");
+      toast.error(err?.message || "Échec de l'enregistrement");
     } finally { setSaving(false); }
+  };
+
+  const confirmDelete = async () => {
+    if (!deletingDua) return;
+    setDelLoading(true);
+    try {
+      await api.del(`/douaa/${deletingDua.id_douaa}`);
+      toast.success("Douaa supprimée");
+      setDeletingDua(null);
+      load();
+    } catch (err: any) {
+      toast.error(err?.message || "Échec de la suppression");
+    } finally { setDelLoading(false); }
   };
 
   const columns: Column<Dua>[] = [
@@ -105,7 +149,11 @@ export default function Duas() {
             columns={columns} data={list} rowKey={(d) => d.id_douaa}
             empty={<EmptyState icon={<BookOpen size={26} />} title="Aucune douaa" description="Ajoutez votre première invocation pour commencer." />}
             actions={(d) => (
-              <Button size="icon" variant="ghost" onClick={() => setViewing(d)}><Eye size={16} /></Button>
+              <div className="flex items-center gap-1">
+                <Button size="icon" variant="ghost" onClick={() => setViewing(d)} title="Voir"><Eye size={16} /></Button>
+                <Button size="icon" variant="ghost" onClick={() => openEdit(d)} title="Modifier"><Pencil size={16} /></Button>
+                <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setDeletingDua(d)} title="Supprimer"><Trash2 size={16} /></Button>
+              </div>
             )}
           />
         )}
@@ -158,7 +206,7 @@ export default function Duas() {
 
       <Dialog open={adding} onOpenChange={(o) => { setAdding(o); if (!o) resetForm(); }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Ajouter une douaa</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingDua ? "Modifier la douaa" : "Ajouter une douaa"}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <Field label="Titre * (3 langues)" error={errors.titre}>
               <I18nInput value={titre} onChange={setTitre} error={!!errors.titre} />
@@ -169,7 +217,7 @@ export default function Duas() {
             <Field label="Traduction (3 langues)">
               <I18nInput value={traduction} onChange={setTraduction} multiline rows={2} />
             </Field>
-            <Field label="Fichier audio (.mp3) *" error={errors.audio}>
+            <Field label={editingDua ? "Fichier audio (.mp3) — optionnel pour mise à jour" : "Fichier audio (.mp3) *"} error={errors.audio}>
               <Input
                 type="file"
                 accept=".mp3,audio/*"
@@ -179,14 +227,23 @@ export default function Duas() {
               {audioFile && (
                 <p className="text-xs text-muted-foreground mt-1">📎 {audioFile.name}</p>
               )}
+              {editingDua && !audioFile && (
+                <p className="text-xs text-muted-foreground mt-1">Laissez vide pour conserver l'audio actuel.</p>
+              )}
             </Field>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAdding(false)} disabled={saving}>Annuler</Button>
-            <Button onClick={submit} disabled={saving}>{saving ? <Spinner className="text-primary-foreground" /> : "Créer la douaa"}</Button>
+            <Button onClick={submit} disabled={saving}>{saving ? <Spinner className="text-primary-foreground" /> : (editingDua ? "Enregistrer" : "Créer la douaa")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!deletingDua} onOpenChange={(o) => !o && setDeletingDua(null)}
+        title="Supprimer cette douaa ?" description={`"${loc(deletingDua?.titre)}" sera supprimée définitivement.`}
+        confirmText="Supprimer" loading={delLoading} onConfirm={confirmDelete}
+      />
     </div>
   );
 }
